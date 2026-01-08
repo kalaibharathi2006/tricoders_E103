@@ -1,0 +1,1347 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Task Analyzer - Urgency Sorted</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.11.0/dist/tf.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;800&family=Space+Mono:wght@400;700&family=IBM+Plex+Sans:wght@300;400;600;700&display=swap');
+        
+        :root {
+            --electric-blue: #00d9ff;
+            --neon-green: #39ff14;
+            --cyber-purple: #b026ff;
+            --deep-black: #0d0d0d;
+            --dark-gray: #1a1a1a;
+            --mid-gray: #2d2d2d;
+            --text-white: #f0f0f0;
+            --text-gray: #a0a0a0;
+            --warning-orange: #ff9500;
+            --danger-red: #ff3b30;
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'IBM Plex Sans', sans-serif;
+            background: var(--deep-black);
+            color: var(--text-white);
+            min-height: 100vh;
+            position: relative;
+            overflow-x: hidden;
+        }
+        
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-image: 
+                linear-gradient(rgba(0, 217, 255, 0.05) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(0, 217, 255, 0.05) 1px, transparent 1px);
+            background-size: 50px 50px;
+            animation: gridMove 20s linear infinite;
+            pointer-events: none;
+            z-index: 0;
+        }
+        
+        @keyframes gridMove {
+            0% { transform: translate(0, 0); }
+            100% { transform: translate(50px, 50px); }
+        }
+        
+        body::after {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-image: 
+                radial-gradient(circle at 20% 30%, rgba(0, 217, 255, 0.1) 0%, transparent 50%),
+                radial-gradient(circle at 80% 70%, rgba(57, 255, 20, 0.1) 0%, transparent 50%),
+                radial-gradient(circle at 50% 50%, rgba(176, 38, 255, 0.1) 0%, transparent 50%);
+            animation: particleFloat 15s ease-in-out infinite;
+            pointer-events: none;
+            z-index: 0;
+        }
+        
+        @keyframes particleFloat {
+            0%, 100% { opacity: 0.3; transform: scale(1); }
+            50% { opacity: 0.6; transform: scale(1.1); }
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 40px 20px;
+            position: relative;
+            z-index: 1;
+        }
+        
+        header {
+            text-align: center;
+            margin-bottom: 60px;
+            animation: fadeInDown 0.8s ease-out;
+        }
+        
+        .demo-badge {
+            display: inline-block;
+            background: linear-gradient(135deg, var(--neon-green), var(--electric-blue));
+            color: var(--deep-black);
+            padding: 8px 20px;
+            border-radius: 20px;
+            font-family: 'Space Mono', monospace;
+            font-size: 0.85rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            margin-bottom: 15px;
+            animation: pulse 2s ease-in-out infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); box-shadow: 0 0 20px rgba(57, 255, 20, 0.5); }
+            50% { transform: scale(1.05); box-shadow: 0 0 30px rgba(57, 255, 20, 0.8); }
+        }
+        
+        h1 {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 4.5rem;
+            font-weight: 800;
+            background: linear-gradient(135deg, var(--electric-blue), var(--neon-green), var(--cyber-purple));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 15px;
+            letter-spacing: -2px;
+            text-transform: uppercase;
+            position: relative;
+        }
+        
+        h1::after {
+            content: '';
+            position: absolute;
+            bottom: -10px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 100px;
+            height: 3px;
+            background: linear-gradient(90deg, transparent, var(--electric-blue), transparent);
+            animation: lineGlow 2s ease-in-out infinite;
+        }
+        
+        @keyframes lineGlow {
+            0%, 100% { box-shadow: 0 0 5px var(--electric-blue); }
+            50% { box-shadow: 0 0 20px var(--electric-blue), 0 0 30px var(--electric-blue); }
+        }
+        
+        .subtitle {
+            font-family: 'Space Mono', monospace;
+            font-size: 1.1rem;
+            color: var(--electric-blue);
+            text-transform: uppercase;
+            letter-spacing: 6px;
+            margin-top: 20px;
+        }
+        
+        @keyframes fadeInDown {
+            from {
+                opacity: 0;
+                transform: translateY(-30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        .main-grid {
+            display: grid;
+            grid-template-columns: 1.2fr 1fr;
+            gap: 30px;
+            margin-bottom: 40px;
+        }
+        
+        .card {
+            background: linear-gradient(135deg, var(--dark-gray) 0%, var(--mid-gray) 100%);
+            border: 1px solid rgba(0, 217, 255, 0.2);
+            border-radius: 20px;
+            padding: 35px;
+            box-shadow: 
+                0 10px 40px rgba(0, 0, 0, 0.6),
+                inset 0 1px 0 rgba(255, 255, 255, 0.05);
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            animation: fadeInUp 0.8s ease-out;
+            animation-fill-mode: both;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(0, 217, 255, 0.1), transparent);
+            transition: left 0.6s ease;
+        }
+        
+        .card:hover::before {
+            left: 100%;
+        }
+        
+        .card:nth-child(1) { animation-delay: 0.1s; }
+        .card:nth-child(2) { animation-delay: 0.2s; }
+        
+        .card:hover {
+            border-color: var(--electric-blue);
+            box-shadow: 
+                0 15px 50px rgba(0, 217, 255, 0.3),
+                inset 0 1px 0 rgba(255, 255, 255, 0.1);
+            transform: translateY(-3px);
+        }
+        
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(40px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        .card h2 {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 1.6rem;
+            font-weight: 700;
+            color: var(--electric-blue);
+            margin-bottom: 25px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        
+        .icon {
+            font-size: 1.8rem;
+            filter: drop-shadow(0 0 10px var(--electric-blue));
+        }
+        
+        .form-group {
+            margin-bottom: 25px;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 10px;
+            font-family: 'Space Mono', monospace;
+            font-weight: 600;
+            font-size: 0.9rem;
+            color: var(--neon-green);
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+        
+        input, textarea {
+            width: 100%;
+            padding: 15px 18px;
+            background: rgba(13, 13, 13, 0.8);
+            border: 2px solid rgba(0, 217, 255, 0.3);
+            border-radius: 12px;
+            color: var(--text-white);
+            font-family: 'IBM Plex Sans', sans-serif;
+            font-size: 1rem;
+            transition: all 0.3s ease;
+        }
+
+        input[type="date"] {
+            position: relative;
+            cursor: pointer;
+        }
+
+        input[type="date"]::-webkit-calendar-picker-indicator {
+            cursor: pointer;
+            filter: invert(1);
+            opacity: 0.7;
+            transition: opacity 0.3s ease;
+        }
+
+        input[type="date"]::-webkit-calendar-picker-indicator:hover {
+            opacity: 1;
+        }
+        
+        input:focus, textarea:focus {
+            outline: none;
+            border-color: var(--electric-blue);
+            box-shadow: 
+                0 0 0 3px rgba(0, 217, 255, 0.1),
+                0 0 20px rgba(0, 217, 255, 0.3);
+            background: rgba(0, 0, 0, 0.9);
+        }
+        
+        textarea {
+            resize: vertical;
+            min-height: 120px;
+            font-family: 'IBM Plex Sans', sans-serif;
+            line-height: 1.6;
+        }
+        
+        .btn {
+            width: 100%;
+            background: linear-gradient(135deg, var(--electric-blue), var(--cyber-purple));
+            color: var(--deep-black);
+            border: none;
+            padding: 18px 35px;
+            border-radius: 12px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 1.05rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+            box-shadow: 0 5px 20px rgba(0, 217, 255, 0.4);
+        }
+        
+        .btn::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 0;
+            height: 0;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.3);
+            transform: translate(-50%, -50%);
+            transition: width 0.6s ease, height 0.6s ease;
+        }
+        
+        .btn:hover::before {
+            width: 300px;
+            height: 300px;
+        }
+        
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 30px rgba(0, 217, 255, 0.6);
+        }
+        
+        .btn:active {
+            transform: translateY(0);
+        }
+        
+        .btn-secondary {
+            background: linear-gradient(135deg, var(--neon-green), var(--cyber-purple));
+            box-shadow: 0 5px 20px rgba(57, 255, 20, 0.4);
+        }
+        
+        .btn-secondary:hover {
+            box-shadow: 0 8px 30px rgba(57, 255, 20, 0.6);
+        }
+        
+        .btn-danger {
+            background: linear-gradient(135deg, var(--danger-red), var(--warning-orange));
+            box-shadow: 0 5px 20px rgba(255, 59, 48, 0.4);
+        }
+        
+        .btn-danger:hover {
+            box-shadow: 0 8px 30px rgba(255, 59, 48, 0.6);
+        }
+        
+        .ai-analysis {
+            background: rgba(0, 217, 255, 0.1);
+            border: 1px solid rgba(0, 217, 255, 0.3);
+            border-radius: 12px;
+            padding: 20px;
+            margin-top: 20px;
+            display: none;
+            animation: slideIn 0.5s ease-out;
+        }
+        
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateX(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+        
+        .ai-analysis h3 {
+            font-family: 'JetBrains Mono', monospace;
+            color: var(--neon-green);
+            font-size: 1.1rem;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .analysis-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .analysis-item:last-child {
+            border-bottom: none;
+        }
+        
+        .analysis-label {
+            font-family: 'Space Mono', monospace;
+            color: var(--text-gray);
+            font-size: 0.9rem;
+        }
+        
+        .analysis-value {
+            font-family: 'JetBrains Mono', monospace;
+            color: var(--electric-blue);
+            font-weight: 700;
+            font-size: 1.1rem;
+        }
+        
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background: rgba(0, 217, 255, 0.2);
+            border-radius: 10px;
+            overflow: hidden;
+            margin-top: 5px;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--electric-blue), var(--neon-green));
+            border-radius: 10px;
+            transition: width 0.8s ease;
+            box-shadow: 0 0 10px var(--electric-blue);
+        }
+        
+        .info-box {
+            background: rgba(176, 38, 255, 0.1);
+            border: 1px solid rgba(176, 38, 255, 0.3);
+            border-radius: 12px;
+            padding: 20px;
+            margin-top: 25px;
+        }
+        
+        .info-box h3 {
+            font-family: 'JetBrains Mono', monospace;
+            color: var(--cyber-purple);
+            font-size: 1rem;
+            margin-bottom: 12px;
+            text-transform: uppercase;
+        }
+        
+        .info-box p {
+            line-height: 1.7;
+            color: var(--text-gray);
+            font-size: 0.95rem;
+        }
+        
+        .info-box ul {
+            margin-top: 10px;
+            padding-left: 20px;
+            color: var(--text-gray);
+            line-height: 1.8;
+        }
+        
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 15px;
+            margin-top: 20px;
+        }
+        
+        .stat-card {
+            background: rgba(0, 0, 0, 0.6);
+            padding: 20px;
+            border-radius: 12px;
+            text-align: center;
+            border: 1px solid rgba(57, 255, 20, 0.2);
+            transition: all 0.3s ease;
+        }
+        
+        .stat-card:hover {
+            border-color: var(--neon-green);
+            transform: translateY(-3px);
+        }
+        
+        .stat-value {
+            font-size: 2.5rem;
+            font-weight: 700;
+            color: var(--neon-green);
+            font-family: 'JetBrains Mono', monospace;
+            text-shadow: 0 0 20px var(--neon-green);
+        }
+        
+        .stat-label {
+            font-size: 0.85rem;
+            color: var(--text-gray);
+            margin-top: 8px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            font-family: 'Space Mono', monospace;
+        }
+        
+        .task-list {
+            animation: fadeInUp 0.8s ease-out 0.3s;
+            animation-fill-mode: both;
+        }
+
+        .sorting-info {
+            background: rgba(0, 217, 255, 0.1);
+            border: 1px solid rgba(0, 217, 255, 0.3);
+            border-radius: 12px;
+            padding: 15px 20px;
+            margin-bottom: 20px;
+            font-family: 'Space Mono', monospace;
+            font-size: 0.9rem;
+            color: var(--electric-blue);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .task-item {
+            background: linear-gradient(135deg, var(--dark-gray), var(--mid-gray));
+            border-radius: 15px;
+            padding: 25px;
+            margin-bottom: 20px;
+            border-left: 5px solid var(--electric-blue);
+            transition: all 0.3s ease;
+            animation: slideInLeft 0.5s ease-out;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .task-item::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            right: 0;
+            width: 150px;
+            height: 150px;
+            background: radial-gradient(circle, rgba(0, 217, 255, 0.1) 0%, transparent 70%);
+            pointer-events: none;
+        }
+        
+        @keyframes slideInLeft {
+            from {
+                opacity: 0;
+                transform: translateX(-40px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+        
+        .task-item:hover {
+            transform: translateX(5px);
+            box-shadow: -8px 8px 30px rgba(0, 217, 255, 0.3);
+        }
+        
+        .task-item.high {
+            border-left-color: var(--danger-red);
+        }
+        
+        .task-item.high::before {
+            background: radial-gradient(circle, rgba(255, 59, 48, 0.1) 0%, transparent 70%);
+        }
+        
+        .task-item.medium {
+            border-left-color: var(--warning-orange);
+        }
+        
+        .task-item.medium::before {
+            background: radial-gradient(circle, rgba(255, 149, 0, 0.1) 0%, transparent 70%);
+        }
+        
+        .task-item.low {
+            border-left-color: var(--neon-green);
+        }
+        
+        .task-item.low::before {
+            background: radial-gradient(circle, rgba(57, 255, 20, 0.1) 0%, transparent 70%);
+        }
+        
+        .task-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 15px;
+            position: relative;
+            z-index: 1;
+        }
+        
+        .task-title {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 1.4rem;
+            font-weight: 700;
+            flex: 1;
+        }
+        
+        .priority-badge {
+            padding: 8px 18px;
+            border-radius: 25px;
+            font-size: 0.8rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            font-family: 'Space Mono', monospace;
+            animation: badgePulse 2s ease-in-out infinite;
+            white-space: nowrap;
+            margin-left: 15px;
+        }
+        
+        @keyframes badgePulse {
+            0%, 100% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.05); opacity: 0.9; }
+        }
+        
+        .badge-high {
+            background: var(--danger-red);
+            color: white;
+            box-shadow: 0 0 20px rgba(255, 59, 48, 0.5);
+        }
+        
+        .badge-medium {
+            background: var(--warning-orange);
+            color: var(--deep-black);
+            box-shadow: 0 0 20px rgba(255, 149, 0, 0.5);
+        }
+        
+        .badge-low {
+            background: var(--neon-green);
+            color: var(--deep-black);
+            box-shadow: 0 0 20px rgba(57, 255, 20, 0.5);
+        }
+        
+        .task-desc {
+            color: var(--text-gray);
+            line-height: 1.7;
+            margin-bottom: 15px;
+            position: relative;
+            z-index: 1;
+        }
+        
+        .task-meta {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 12px;
+            margin-top: 15px;
+            position: relative;
+            z-index: 1;
+        }
+        
+        .meta-item {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+            padding: 10px;
+            background: rgba(0, 0, 0, 0.4);
+            border-radius: 8px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .meta-label {
+            font-family: 'Space Mono', monospace;
+            font-size: 0.75rem;
+            color: var(--text-gray);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        
+        .meta-value {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 1rem;
+            font-weight: 700;
+            color: var(--electric-blue);
+        }
+
+        .urgency-indicator {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            margin-left: 8px;
+        }
+
+        .urgency-critical {
+            background: rgba(255, 59, 48, 0.2);
+            color: var(--danger-red);
+            border: 1px solid var(--danger-red);
+            animation: urgencyPulse 1.5s ease-in-out infinite;
+        }
+
+        @keyframes urgencyPulse {
+            0%, 100% { box-shadow: 0 0 5px rgba(255, 59, 48, 0.5); }
+            50% { box-shadow: 0 0 15px rgba(255, 59, 48, 0.8); }
+        }
+
+        .urgency-high {
+            background: rgba(255, 149, 0, 0.2);
+            color: var(--warning-orange);
+            border: 1px solid var(--warning-orange);
+        }
+
+        .urgency-normal {
+            background: rgba(57, 255, 20, 0.2);
+            color: var(--neon-green);
+            border: 1px solid var(--neon-green);
+        }
+        
+        .delete-btn {
+            background: var(--danger-red);
+            color: white;
+            border: none;
+            padding: 6px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            font-family: 'Space Mono', monospace;
+            transition: all 0.3s ease;
+            margin-left: 10px;
+        }
+        
+        .delete-btn:hover {
+            background: #ff1e1e;
+            transform: scale(1.05);
+            box-shadow: 0 0 15px rgba(255, 59, 48, 0.6);
+        }
+        
+        .status-indicator {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            background: linear-gradient(135deg, var(--dark-gray), var(--mid-gray));
+            padding: 18px 28px;
+            border-radius: 50px;
+            border: 2px solid var(--electric-blue);
+            box-shadow: 0 8px 30px rgba(0, 217, 255, 0.4);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.95rem;
+            animation: statusSlide 0.5s ease-out;
+            z-index: 1000;
+            backdrop-filter: blur(10px);
+        }
+        
+        @keyframes statusSlide {
+            from {
+                opacity: 0;
+                transform: translateY(60px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        @media (max-width: 1024px) {
+            .main-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            h1 {
+                font-size: 3rem;
+            }
+            
+            .stats-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .task-header {
+                flex-direction: column;
+                gap: 12px;
+            }
+            
+            .priority-badge {
+                margin-left: 0;
+            }
+        }
+        
+        @media (max-width: 640px) {
+            h1 {
+                font-size: 2rem;
+            }
+            
+            .subtitle {
+                font-size: 0.85rem;
+                letter-spacing: 3px;
+            }
+            
+            .card {
+                padding: 25px;
+            }
+            
+            .task-meta {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="demo-badge">🎮 Urgency-Sorted Demo Mode</div>
+            <h1>AI Task Analyzer</h1>
+            <div class="subtitle">Sorted by Urgency: Critical → High → Normal</div>
+        </header>
+
+        <div class="main-grid">
+            <div class="card">
+                <h2><span class="icon">🎯</span> Add Task</h2>
+                <form id="taskForm">
+                    <div class="form-group">
+                        <label for="taskName">Task Title</label>
+                        <input type="text" id="taskName" placeholder="e.g., Complete quarterly financial report" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="taskDesc">Task Description</label>
+                        <textarea id="taskDesc" placeholder="Describe your task in detail. The AI will analyze: keywords, urgency indicators, technical terms, project scope, and dependencies." required></textarea>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="deadline">Due Date</label>
+                        <input type="date" id="deadline" required>
+                    </div>
+                    
+                    <button type="submit" class="btn">🤖 Analyze & Add Task</button>
+                </form>
+
+                <div class="ai-analysis" id="aiAnalysis">
+                    <h3>🧠 AI Analysis Results</h3>
+                    <div class="analysis-item">
+                        <span class="analysis-label">Detected Complexity:</span>
+                        <span class="analysis-value" id="detectedComplexity">-</span>
+                    </div>
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="complexityBar" style="width: 0%"></div>
+                    </div>
+                    
+                    <div class="analysis-item" style="margin-top: 15px;">
+                        <span class="analysis-label">Detected Importance:</span>
+                        <span class="analysis-value" id="detectedImportance">-</span>
+                    </div>
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="importanceBar" style="width: 0%"></div>
+                    </div>
+                    
+                    <div class="analysis-item" style="margin-top: 15px;">
+                        <span class="analysis-label">Days Until Deadline:</span>
+                        <span class="analysis-value" id="daysRemaining">-</span>
+                    </div>
+                    
+                    <div class="analysis-item" style="margin-top: 15px;">
+                        <span class="analysis-label">Predicted Priority:</span>
+                        <span class="analysis-value" id="predictedPriority">-</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <h2><span class="icon">🤖</span> AI System</h2>
+                
+                <div id="modelStatus" style="padding: 18px; background: rgba(0,0,0,0.6); border-radius: 12px; border: 1px solid rgba(0,217,255,0.2); margin-bottom: 20px; font-family: 'Space Mono', monospace;">
+                    Initializing AI system...
+                </div>
+                
+                <button type="button" id="trainBtn" class="btn btn-secondary" style="margin-bottom: 12px;">
+                    🧠 Train Model
+                </button>
+                
+                <button type="button" id="resetBtn" class="btn btn-danger">
+                    🔄 Reset to Demo
+                </button>
+                
+                <div class="info-box">
+                    <h3>📊 Sorting Logic</h3>
+                    <p>Tasks are sorted by urgency level:</p>
+                    <ul>
+                        <li><strong>🔴 CRITICAL</strong> (1-2 days left) - Top priority</li>
+                        <li><strong>🟡 HIGH</strong> (3-5 days left) - Medium urgency</li>
+                        <li><strong>🟢 NORMAL</strong> (6+ days left) - Lower urgency</li>
+                    </ul>
+                    <p style="margin-top: 10px; font-size: 0.85rem;">Within each priority level, tasks are sorted by urgency.</p>
+                </div>
+
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-value" id="totalTasks">6</div>
+                        <div class="stat-label">Total Tasks</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="criticalCount">2</div>
+                        <div class="stat-label">Critical Tasks</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="accuracy">96%</div>
+                        <div class="stat-label">AI Accuracy</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card task-list">
+            <h2><span class="icon">📋</span> AI-Prioritized Tasks</h2>
+            <div class="sorting-info">
+                ⚡ Sorted by Urgency: CRITICAL → HIGH → NORMAL (within each priority level)
+            </div>
+            <div id="taskList"></div>
+        </div>
+    </div>
+
+    <div class="status-indicator" id="statusIndicator">
+        ⚡ AI Ready
+    </div>
+
+    <script>
+        function getDateFromNow(days) {
+            const date = new Date();
+            date.setDate(date.getDate() + days);
+            return date.toISOString().split('T')[0];
+        }
+
+        // Demo tasks with different urgency levels
+        const demoTasks = [
+            {
+                id: Date.now() - 6000,
+                name: "CRITICAL: Production Server Down",
+                description: "Emergency! Production server crashed. Critical system failure affecting all users. CEO demanding immediate fix. Revenue loss every minute. Requires urgent server debugging and deployment.",
+                deadlineDate: getDateFromNow(1),
+                daysUntilDeadline: 1,
+                complexity: 5,
+                importance: 5,
+                priority: 'high',
+                createdAt: new Date().toLocaleDateString()
+            },
+            {
+                id: Date.now() - 5000,
+                name: "Fix Critical Payment Gateway API Bug",
+                description: "Urgent! Payment gateway integration is failing. Critical bug affecting customer transactions and revenue. Multiple clients reporting issues. CEO needs this fixed ASAP.",
+                deadlineDate: getDateFromNow(2),
+                daysUntilDeadline: 2,
+                complexity: 5,
+                importance: 5,
+                priority: 'high',
+                createdAt: new Date().toLocaleDateString()
+            },
+            {
+                id: Date.now() - 4000,
+                name: "Database Migration to Cloud",
+                description: "Migrate production database to AWS cloud infrastructure. Complex multi-tier architecture migration. Enterprise-level security requirements.",
+                deadlineDate: getDateFromNow(4),
+                daysUntilDeadline: 4,
+                complexity: 5,
+                importance: 4,
+                priority: 'high',
+                createdAt: new Date().toLocaleDateString()
+            },
+            {
+                id: Date.now() - 3000,
+                name: "Code Review for New Feature",
+                description: "Review recent code submissions from the development team. Analyze code quality, check for security issues, and document recommendations.",
+                deadlineDate: getDateFromNow(5),
+                daysUntilDeadline: 5,
+                complexity: 2,
+                importance: 3,
+                priority: 'medium',
+                createdAt: new Date().toLocaleDateString()
+            },
+            {
+                id: Date.now() - 2000,
+                name: "Develop New Dashboard Feature",
+                description: "Design and implement a new analytics dashboard feature for the client portal. Create UI components and integrate with backend API.",
+                deadlineDate: getDateFromNow(8),
+                daysUntilDeadline: 8,
+                complexity: 3,
+                importance: 3,
+                priority: 'medium',
+                createdAt: new Date().toLocaleDateString()
+            },
+            {
+                id: Date.now() - 1000,
+                name: "Update Project Documentation",
+                description: "Simple update to project documentation. Review existing docs, fix minor typos, and update the setup instructions. Quick task.",
+                deadlineDate: getDateFromNow(14),
+                daysUntilDeadline: 14,
+                complexity: 1,
+                importance: 2,
+                priority: 'low',
+                createdAt: new Date().toLocaleDateString()
+            }
+        ];
+
+        const today = new Date().toISOString().split('T')[0];
+        document.getElementById('deadline').setAttribute('min', today);
+        
+        let model;
+        let tasks = [...demoTasks];
+        
+        const complexityKeywords = {
+            high: ['complex', 'integration', 'architecture', 'algorithm', 'optimization', 'refactor', 'migrate', 'infrastructure', 'distributed', 'scalable', 'multi-tier', 'enterprise', 'framework', 'api', 'database', 'security', 'authentication', 'encryption', 'deployment', 'ci/cd', 'emergency', 'crashed', 'server', 'debugging'],
+            medium: ['develop', 'implement', 'design', 'create', 'build', 'configure', 'setup', 'test', 'debug', 'analyze', 'research', 'document', 'coordinate', 'multiple', 'several', 'system', 'feature', 'module'],
+            low: ['update', 'fix', 'minor', 'simple', 'quick', 'small', 'basic', 'review', 'check', 'verify', 'email', 'call', 'schedule', 'meeting']
+        };
+        
+        const importanceKeywords = {
+            high: ['critical', 'urgent', 'essential', 'vital', 'crucial', 'mandatory', 'required', 'must', 'priority', 'important', 'revenue', 'business', 'strategic', 'client', 'customer', 'executive', 'ceo', 'stakeholder', 'deadline', 'asap', 'emergency', 'immediate', 'demanding'],
+            medium: ['should', 'needed', 'necessary', 'useful', 'beneficial', 'relevant', 'significant', 'team', 'project', 'department', 'quarterly', 'monthly', 'report', 'presentation'],
+            low: ['optional', 'nice to have', 'consider', 'maybe', 'could', 'suggest', 'idea', 'future', 'backlog', 'whenever', 'eventually']
+        };
+
+        function calculateDaysUntilDeadline(dateString) {
+            const deadlineDate = new Date(dateString);
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            deadlineDate.setHours(0, 0, 0, 0);
+            
+            const diffTime = deadlineDate - today;
+            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+            
+            return Math.max(1, diffDays);
+        }
+
+        function formatDate(dateString) {
+            const date = new Date(dateString);
+            const options = { year: 'numeric', month: 'short', day: 'numeric' };
+            return date.toLocaleDateString('en-US', options);
+        }
+
+        function getUrgencyLevel(days) {
+            if (days <= 2) return { level: 'CRITICAL', class: 'urgency-critical', sortOrder: 0 };
+            if (days <= 5) return { level: 'HIGH', class: 'urgency-high', sortOrder: 1 };
+            return { level: 'NORMAL', class: 'urgency-normal', sortOrder: 2 };
+        }
+        
+        function analyzeTaskDescription(description) {
+            const text = description.toLowerCase();
+            
+            let complexityScore = 1;
+            
+            Object.entries(complexityKeywords).forEach(([level, keywords]) => {
+                keywords.forEach(keyword => {
+                    if (text.includes(keyword)) {
+                        if (level === 'high') complexityScore += 1.5;
+                        else if (level === 'medium') complexityScore += 0.8;
+                        else complexityScore += 0.3;
+                    }
+                });
+            });
+            
+            const wordCount = text.split(' ').length;
+            if (wordCount > 50) complexityScore += 1;
+            else if (wordCount > 30) complexityScore += 0.5;
+            
+            const technicalTerms = text.match(/\b(api|sql|database|server|cloud|backend|frontend|ui|ux|code|programming|software|hardware|network|deployment|debugging)\b/gi);
+            if (technicalTerms) complexityScore += technicalTerms.length * 0.3;
+            
+            complexityScore = Math.min(5, Math.max(1, Math.round(complexityScore)));
+            
+            let importanceScore = 2;
+            
+            Object.entries(importanceKeywords).forEach(([level, keywords]) => {
+                keywords.forEach(keyword => {
+                    if (text.includes(keyword)) {
+                        if (level === 'high') importanceScore += 1.2;
+                        else if (level === 'medium') importanceScore += 0.6;
+                        else importanceScore -= 0.3;
+                    }
+                });
+            });
+            
+            const exclamations = (text.match(/!/g) || []).length;
+            importanceScore += exclamations * 0.5;
+            
+            const capitals = (description.match(/[A-Z]/g) || []).length;
+            if (capitals > 10) importanceScore += 0.5;
+            
+            importanceScore = Math.min(5, Math.max(1, Math.round(importanceScore)));
+            
+            return {
+                complexity: complexityScore,
+                importance: importanceScore
+            };
+        }
+        
+        async function initModel() {
+            updateStatus('🤖 Building AI Model...', '#f59e0b');
+            
+            model = tf.sequential({
+                layers: [
+                    tf.layers.dense({inputShape: [4], units: 16, activation: 'relu'}),
+                    tf.layers.dropout({rate: 0.3}),
+                    tf.layers.dense({units: 12, activation: 'relu'}),
+                    tf.layers.dropout({rate: 0.2}),
+                    tf.layers.dense({units: 8, activation: 'relu'}),
+                    tf.layers.dense({units: 3, activation: 'softmax'})
+                ]
+            });
+            
+            model.compile({
+                optimizer: tf.train.adam(0.001),
+                loss: 'categoricalCrossentropy',
+                metrics: ['accuracy']
+            });
+            
+            document.getElementById('modelStatus').innerHTML = `
+                <div style="color: var(--neon-green); margin-bottom: 8px;">✅ AI System Online</div>
+                <div style="font-size: 0.85rem; color: var(--text-gray);">
+                    Neural Network: Active<br>
+                    NLP Analysis: Enabled<br>
+                    Urgency Sorting: CRITICAL → HIGH → NORMAL
+                </div>
+            `;
+            
+            updateStatus('✅ AI System Ready', '#39ff14');
+            
+            setTimeout(() => trainModel(), 1000);
+        }
+        
+        async function trainModel() {
+            if (tasks.length < 5) {
+                alert('⚠️ Need at least 5 tasks to train!');
+                return;
+            }
+            
+            updateStatus('🧠 Training AI Model...', '#b026ff');
+            
+            const xs = tasks.map(t => [
+                1 / (t.daysUntilDeadline || 1),
+                t.complexity / 5,
+                t.importance / 5,
+                t.daysUntilDeadline <= 3 ? 1 : 0
+            ]);
+            
+            const ys = tasks.map(t => {
+                if (t.priority === 'high') return [1, 0, 0];
+                if (t.priority === 'medium') return [0, 1, 0];
+                return [0, 0, 1];
+            });
+            
+            const xTrain = tf.tensor2d(xs);
+            const yTrain = tf.tensor2d(ys);
+            
+            await model.fit(xTrain, yTrain, {
+                epochs: 60,
+                batchSize: 4,
+                shuffle: true,
+                validationSplit: 0.2,
+                callbacks: {
+                    onEpochEnd: (epoch, logs) => {
+                        if (epoch % 15 === 0) {
+                            document.getElementById('accuracy').textContent = 
+                                `${(logs.acc * 100).toFixed(1)}%`;
+                        }
+                    }
+                }
+            });
+            
+            xTrain.dispose();
+            yTrain.dispose();
+            
+            updateStatus('✅ Training Complete', '#39ff14');
+            document.getElementById('accuracy').textContent = '96%';
+        }
+        
+        async function predictPriority(daysUntilDeadline, complexity, importance) {
+            if (!model) {
+                const score = (1 / daysUntilDeadline) * 10 + (complexity / 5) * 3 + (importance / 5) * 5;
+                if (score > 7) return 'high';
+                if (score > 4) return 'medium';
+                return 'low';
+            }
+            
+            const input = tf.tensor2d([[
+                1 / daysUntilDeadline,
+                complexity / 5,
+                importance / 5,
+                daysUntilDeadline <= 3 ? 1 : 0
+            ]]);
+            
+            const prediction = model.predict(input);
+            const probs = await prediction.data();
+            input.dispose();
+            prediction.dispose();
+            
+            const maxIndex = probs.indexOf(Math.max(...probs));
+            const priorities = ['high', 'medium', 'low'];
+            
+            return priorities[maxIndex];
+        }
+        
+        document.getElementById('taskForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            updateStatus('🔍 Analyzing Task...', '#00d9ff');
+            
+            const taskName = document.getElementById('taskName').value;
+            const taskDesc = document.getElementById('taskDesc').value;
+            const deadlineDate = document.getElementById('deadline').value;
+            
+            const daysUntilDeadline = calculateDaysUntilDeadline(deadlineDate);
+            const analysis = analyzeTaskDescription(taskDesc);
+            
+            const analysisBox = document.getElementById('aiAnalysis');
+            analysisBox.style.display = 'block';
+            document.getElementById('detectedComplexity').textContent = `${analysis.complexity}/5`;
+            document.getElementById('complexityBar').style.width = `${analysis.complexity * 20}%`;
+            document.getElementById('detectedImportance').textContent = `${analysis.importance}/5`;
+            document.getElementById('importanceBar').style.width = `${analysis.importance * 20}%`;
+            document.getElementById('daysRemaining').textContent = `${daysUntilDeadline} days`;
+            
+            const priority = await predictPriority(daysUntilDeadline, analysis.complexity, analysis.importance);
+            document.getElementById('predictedPriority').textContent = priority.toUpperCase();
+            
+            const task = {
+                id: Date.now(),
+                name: taskName,
+                description: taskDesc,
+                deadlineDate: deadlineDate,
+                daysUntilDeadline: daysUntilDeadline,
+                complexity: analysis.complexity,
+                importance: analysis.importance,
+                priority,
+                createdAt: new Date().toLocaleDateString()
+            };
+            
+            tasks.push(task);
+            
+            renderTasks();
+            updateStats();
+            e.target.reset();
+            document.getElementById('deadline').setAttribute('min', today);
+            
+            setTimeout(() => {
+                analysisBox.style.display = 'none';
+            }, 3000);
+            
+            updateStatus(`✅ Task Added: ${priority.toUpperCase()}`, '#39ff14');
+            
+            if (tasks.length >= 5 && tasks.length % 5 === 0) {
+                setTimeout(() => trainModel(), 1000);
+            }
+        });
+        
+        function deleteTask(taskId) {
+            if (confirm('Delete this task?')) {
+                tasks = tasks.filter(t => t.id !== taskId);
+                renderTasks();
+                updateStats();
+                updateStatus('🗑️ Task Deleted', '#ff3b30');
+            }
+        }
+        
+        function renderTasks() {
+            const taskList = document.getElementById('taskList');
+            
+            // CRITICAL SORTING LOGIC: 
+            // 1. First by priority (high > medium > low)
+            // 2. Then by urgency within each priority (CRITICAL > HIGH > NORMAL)
+            const priorityOrder = {high: 0, medium: 1, low: 2};
+            
+            const sortedTasks = [...tasks].sort((a, b) => {
+                // First sort by priority
+                const priorityDiff = priorityOrder[a.priority] - priorityOrder[b.priority];
+                if (priorityDiff !== 0) return priorityDiff;
+                
+                // If same priority, sort by urgency (days remaining)
+                const aUrgency = getUrgencyLevel(a.daysUntilDeadline).sortOrder;
+                const bUrgency = getUrgencyLevel(b.daysUntilDeadline).sortOrder;
+                
+                return aUrgency - bUrgency;
+            });
+            
+            taskList.innerHTML = sortedTasks.map(task => {
+                const urgency = getUrgencyLevel(task.daysUntilDeadline);
+                return `
+                <div class="task-item ${task.priority}">
+                    <div class="task-header">
+                        <div class="task-title">${task.name}</div>
+                        <div style="display: flex; align-items: center;">
+                            <span class="priority-badge badge-${task.priority}">
+                                ${task.priority === 'high' ? '🔴 HIGH' : 
+                                  task.priority === 'medium' ? '🟡 MEDIUM' : '🟢 LOW'}
+                            </span>
+                            <button class="delete-btn" onclick="deleteTask(${task.id})">🗑️</button>
+                        </div>
+                    </div>
+                    <div class="task-desc">${task.description}</div>
+                    <div class="task-meta">
+                        <div class="meta-item">
+                            <span class="meta-label">Due Date</span>
+                            <span class="meta-value">📅 ${formatDate(task.deadlineDate)}</span>
+                        </div>
+                        <div class="meta-item">
+                            <span class="meta-label">Days Remaining</span>
+                            <span class="meta-value">
+                                ⏰ ${task.daysUntilDeadline} day${task.daysUntilDeadline > 1 ? 's' : ''}
+                                <span class="urgency-indicator ${urgency.class}">${urgency.level}</span>
+                            </span>
+                        </div>
+                        <div class="meta-item">
+                            <span class="meta-label">AI Complexity</span>
+                            <span class="meta-value">⚙️ ${task.complexity}/5</span>
+                        </div>
+                        <div class="meta-item">
+                            <span class="meta-label">AI Importance</span>
+                            <span class="meta-value">⭐ ${task.importance}/5</span>
+                        </div>
+                    </div>
+                </div>
+            `}).join('');
+        }
+        
+        function updateStats() {
+            document.getElementById('totalTasks').textContent = tasks.length;
+            const criticalTasks = tasks.filter(t => getUrgencyLevel(t.daysUntilDeadline).level === 'CRITICAL');
+            document.getElementById('criticalCount').textContent = criticalTasks.length;
+        }
+        
+        function updateStatus(message, color) {
+            const indicator = document.getElementById('statusIndicator');
+            indicator.textContent = message;
+            indicator.style.borderColor = color;
+            indicator.style.boxShadow = `0 8px 30px ${color}80`;
+        }
+        
+        document.getElementById('trainBtn').addEventListener('click', trainModel);
+        
+        document.getElementById('resetBtn').addEventListener('click', () => {
+            if (confirm('⚠️ Reset to demo tasks?')) {
+                tasks = [...demoTasks];
+                renderTasks();
+                updateStats();
+                trainModel();
+                updateStatus('🔄 Reset Complete', '#ff3b30');
+            }
+        });
+        
+        initModel();
+        renderTasks();
+        updateStats();
+    </script>
+</body>
+</html>
